@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<base target="_blank">
+<title>予定の盤</title>
+<style>
+:root {
+  color-scheme: light;
+  --地: #f6f1e7;
+  --字: #2b2118;
+  --薄い字: #5a4a3a;
+  --線: #6b4a2b;
+  --駒の縁: #7a5634;
+  --赤: #b23a2a;
+}
+html, body { margin: 0; background: var(--地); color: var(--字); }
+body { font-family: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif; font-size: 15px; line-height: 1.6; }
+.全体 { max-width: 1180px; margin: 0 auto; padding: 12px 16px 28px; box-sizing: border-box; }
+h1 { font-size: 22px; margin: 2px 0 0; letter-spacing: 1px; }
+.副 { margin: 0; color: var(--薄い字); font-size: 14px; }
+.案内 { margin: 8px 0 10px; font-weight: bold; }
+main { display: flex; gap: 20px; align-items: flex-start; }
+.盤の場所 { flex: 1 1 auto; min-width: 0; position: relative; }
+.横 { flex: 0 0 340px; min-width: 0; }
+@media (max-width: 900px) {
+  main { flex-direction: column; }
+  .横 { flex-basis: auto; width: 100%; }
+}
+.日のタブ { display: flex; gap: 6px; margin: 0 auto; padding-left: 4px; box-sizing: border-box; }
+.日のタブ button { border-radius: 8px 8px 0 0; border-bottom: 0; background: #fffaf2; padding: 4px 12px; font-size: 14px; }
+.日のタブ button[aria-selected="true"] { background: #e9c27c; }
+.日のタブ button.乗っている { outline: 3px dashed var(--線); outline-offset: -3px; }
+.日のタブ button.乗っている.置けない { outline-color: var(--赤); }
+.日のタブ button.光る { animation: 光る 1.2s ease; }
+@keyframes 光る { 0% { background: #fff1a8; } 100% { background: #fffaf2; } }
+.日のタブ[hidden] { display: none; }
+.盤 {
+  position: relative; margin: 0 auto;
+  background: linear-gradient(135deg, #e9c27c 0%, #dcae63 55%, #e4ba72 100%);
+  border: 3px solid #5b3d22; border-radius: 6px; box-shadow: 0 6px 18px rgba(70, 45, 20, .3);
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.背景, .駒の層 { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+.背景 > div { position: absolute; box-sizing: border-box; }
+.列の見出し { line-height: 30px; text-align: center; font-weight: bold; font-size: 14px; white-space: nowrap; overflow: hidden; color: #2b1a0c; }
+.列の見出し.休み { color: #5a4632; font-size: 12px; }
+.細い .列の見出し { line-height: 13px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 13px; }
+.細い .列の見出し.休み { font-size: 10px; }
+.休みの列 { background: rgba(90, 60, 30, .28); }
+.横線 { border-top: 1px dotted rgba(91, 61, 34, .55); }
+.横線.太 { border-top: 1px solid var(--線); }
+.縦線 { border-left: 1px solid var(--線); }
+.時刻 { text-align: right; font-size: 12px; font-weight: bold; color: #3d2a18; line-height: 16px; }
+.駒 { position: absolute; z-index: 3; cursor: grab; touch-action: none; }
+.駒:not(.持ち上げ) { transition: left .15s ease, top .15s ease; }
+.駒の縁, .駒の面 { position: absolute; clip-path: polygon(50% 0, 94% 9px, 100% 100%, 0 100%, 6% 9px); }
+.駒の縁 { left: 0; top: 0; right: 0; bottom: 0; background: var(--駒の縁); }
+.駒の面 {
+  left: 1px; top: 1px; right: 1px; bottom: 1px; background: linear-gradient(180deg, #fbe9c4, #f0d29a);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 8px 2px 1px; box-sizing: border-box; text-align: center; overflow: hidden;
+}
+.駒の時 { font-size: 10px; font-weight: bold; color: #5a4632; line-height: 1.1; }
+.駒の名 { font-family: "Yu Mincho", "游明朝", "Hiragino Mincho ProN", "MS Mincho", serif; font-weight: bold; font-size: 13px; line-height: 1.2; color: #24170d; }
+.細い .駒の面 { padding-top: 6px; }
+.細い .駒の時 { font-size: 9px; }
+.細い .駒の名 { font-size: 11px; }
+.駒.持ち上げ { z-index: 10; cursor: grabbing; filter: drop-shadow(0 12px 9px rgba(40, 25, 10, .45)); }
+.影 { position: absolute; z-index: 9; border: 3px dashed var(--線); border-radius: 6px; box-sizing: border-box; background: rgba(255, 250, 240, .35); pointer-events: none; }
+.影.置けない { border-color: var(--赤); background: rgba(255, 235, 230, .55); }
+.吹き出し {
+  position: absolute; z-index: 20; max-width: 290px; background: #fff4f1; border: 2px solid var(--赤); color: #8f2416;
+  font-weight: bold; font-size: 14px; line-height: 1.5; padding: 6px 10px; border-radius: 8px; box-shadow: 0 3px 8px rgba(0, 0, 0, .15); pointer-events: none;
+}
+.吹き出し.注意 { background: #fffbea; border-color: #8a6d00; color: #5c4800; }
+.様子 { border: 2px solid #222; border-radius: 6px; background: #fff; padding: 6px 10px; font-weight: bold; min-height: 1.6em; }
+.様子.書いている { border-color: #8a6d00; }
+.様子.注意 { border-color: var(--赤); color: #8f2416; }
+.ボタン { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+button { font: inherit; font-weight: bold; border: 2px solid #5b3d22; border-radius: 6px; background: #fff; padding: 6px 12px; cursor: pointer; color: var(--字); }
+button:disabled { opacity: .45; cursor: default; }
+.鍵の字 { font-size: 12px; color: var(--薄い字); margin-left: 6px; font-weight: normal; }
+.横 h2 { font-size: 15px; margin: 14px 0 6px; }
+.棋譜 { list-style: none; margin: 0; padding: 8px 10px; background: #fffaf2; border: 1px solid #cdb79a; border-radius: 8px; max-height: 190px; overflow-y: auto; font-size: 14px; }
+.棋譜 li { margin: 2px 0; }
+.棋譜 li.書いている, .棋譜 li.空 { color: var(--薄い字); }
+.小 { font-size: 12px; color: var(--薄い字); margin: 0 0 4px; }
+.表の中身 { overflow-x: auto; background: #fff; border: 1px solid #999; border-radius: 6px; }
+.表の中身 table { border-collapse: collapse; font-size: 11px; table-layout: fixed; width: 100%; }
+.表の中身 td { border: 1px solid #d0d0d0; padding: 0 2px; height: 16px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.表の中身 col.行番の列 { width: 24px; }
+.表の中身 col.時刻の列 { width: 40px; }
+.表の中身 td.行番, .表の中身 td.時刻の枡 { text-overflow: clip; }
+@media (max-width: 480px) { .表の中身 table { font-size: 10px; } }
+.表の中身 tr.頭 td, .表の中身 td.行番 { background: #eee; color: #555; text-align: center; }
+.幕 { position: absolute; z-index: 30; left: 0; top: 0; right: 0; bottom: 0; background: rgba(246, 241, 231, .94); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; text-align: center; }
+.幕[hidden] { display: none; }
+.幕 p { font-weight: bold; max-width: 480px; margin: 0 0 12px; }
+footer { margin-top: 18px; font-size: 12px; color: var(--薄い字); }
+</style>
+</head>
+<body>
+<div class="全体">
+  <header>
+    <h1>予定の盤</h1>
+    <p class="副">Google スプレッドシートと Google Apps Script で動いています</p>
+  </header>
+  <main>
+    <section class="盤の場所" id="盤の場所">
+      <p class="案内">駒をつかんで、動かしてみてください。日のタブに乗せると、ほかの日へも動かせます</p>
+      <div class="日のタブ" id="日のタブ" role="tablist" aria-label="盤の日" hidden></div>
+      <div class="盤" id="盤" aria-label="予定の盤（担当×時刻）">
+        <div class="背景" id="背景"></div>
+        <div class="駒の層" id="駒の層"></div>
+        <div class="影" id="影" hidden></div>
+        <div class="吹き出し" id="吹き出し" hidden></div>
+      </div>
+      <div class="幕" id="幕" hidden>
+        <p id="幕の字"></p>
+        <button type="button" id="幕のボタン" hidden>はじめの形に戻す</button>
+      </div>
+    </section>
+    <aside class="横">
+      <div class="様子" id="様子" role="status" aria-live="polite">表を読んでいます…</div>
+      <div class="ボタン">
+        <button type="button" id="待った">待った（一手戻す）<span class="鍵の字">Ctrl+Z</span></button>
+        <button type="button" id="はじめ">はじめの形に戻す</button>
+      </div>
+      <h2>棋譜（動かした記録）</h2>
+      <ol class="棋譜" id="棋譜"></ol>
+      <h2>Google スプレッドシートのいまの中身</h2>
+      <p class="小">表の「盤」のシートを、動かすたびに読み戻しています</p>
+      <div class="表の中身" id="表の中身"></div>
+    </aside>
+  </main>
+  <footer>この盤の人と予定は、すべて作り物です。盤はみんなで1つです（ほかの人が動かすと、こちらにも出ます）。10分だれも動かさないと、はじめの形に戻ります。</footer>
+</div>
+<!--芯をここに入れる-->
+<script>
+(function () {
+  'use strict';
+
+  // 確かめの時だけ、待ちの秒などを短くできる（ふだんは下の数のまま）
+  var 設定 = Object.assign({ 書く待ちの秒: 20, 読む待ちの秒: 20, 読み直しの秒: 20, 止めるまでの分: 10, 吹き出しの秒: 3, タブを待つ秒: 0.45 }, window.予定の盤の設定 || {});
+  var 担当たち = 芯.担当たち;
+  var 段の数 = 芯.段の数;
+
+  var 要 = function (id) { return document.getElementById(id); };
+  var 盤の場所 = 要('盤の場所'), 盤 = 要('盤'), 背景 = 要('背景'), 駒の層 = 要('駒の層'), 影 = 要('影'), 吹き出し = 要('吹き出し');
+  var 様子 = 要('様子'), 棋譜の欄 = 要('棋譜'), 表の中身 = 要('表の中身');
+  var 幕 = 要('幕'), 幕の字 = 要('幕の字'), 幕のボタン = 要('幕のボタン');
+  var 待ったのボタン = 要('待った'), はじめのボタン = 要('はじめ'), 日のタブ = 要('日のタブ');
+
+  // ---------- 状態 ----------
+  var 表の姿 = null;     // 最後に表から届いた姿（版・日たち・駒たち・盤の中身・棋譜・戻せる手・手数）
+  var 表示の日 = 0;      // いま盤に出している日（0・1・2）
+  var 名前たち = [];     // 日の名前（「11/27(金)」…）
+  var 画面の駒たち = []; // 見えている駒（表の姿に、まだ表に書いていない手を重ねた物）
+  var 送る列 = [];       // まだ表に書き終えていない手（古い順。先頭は返事を待っている手）
+  var 送っている = null;
+  var 世代 = 0;          // 表に合わせ直すたびに上げる。前の世代の返事は使わない
+  var 書いた回数 = 0;    // 書き終えた回数。読み始めた後に書いた時は、その読みを使わない
+  var 通し = 0;
+  var 持ち = null;       // つかんでいる駒
+  var 寸 = null;
+  var 最後に触った = Date.now();
+  var 読み直しの番 = null;
+  var 吹き出しの時計 = null;
+  var 読み始めた = false;
+
+  // ---------- 盤の寸法と背景 ----------
+  function 寸を測る() {
+    var 幅 = Math.max(300, 盤の場所.clientWidth);
+    var 時刻の幅 = 幅 < 480 ? 40 : 48;
+    // 盤の幅（時刻＋6列＋内の余白8）と枠の線（左右3ずつ）が、置き場の幅に収まるようにする
+    var 列の幅 = Math.max(44, Math.min(104, Math.floor((幅 - 時刻の幅 - 16) / 担当たち.length)));
+    var 段の高さ = 列の幅 < 60 ? 24 : 26;
+    var 見出しの高さ = 30;
+    return {
+      時刻の幅: 時刻の幅, 列の幅: 列の幅, 段の高さ: 段の高さ, 見出しの高さ: 見出しの高さ,
+      幅: 時刻の幅 + 列の幅 * 担当たち.length + 8,
+      高さ: 見出しの高さ + 段の高さ * 段の数 + 8,
+      細い: 列の幅 < 60
+    };
+  }
+  function マスの左(列) { return 寸.時刻の幅 + 列 * 寸.列の幅; }
+  function 段の上(段) { return 寸.見出しの高さ + 段 * 寸.段の高さ; }
+
+  function 箱(組, 左, 上, 幅, 高さ) {
+    var e = document.createElement('div');
+    e.className = 組;
+    e.style.left = 左 + 'px';
+    e.style.top = 上 + 'px';
+    e.style.width = 幅 + 'px';
+    e.style.height = 高さ + 'px';
+    return e;
+  }
+
+  function 背景を描く() {
+    寸 = 寸を測る();
+    盤.style.width = 寸.幅 + 'px';
+    盤.style.height = 寸.高さ + 'px';
+    日のタブ.style.width = (寸.幅 + 6) + 'px';
+    盤.classList.toggle('細い', 寸.細い);
+    背景.textContent = '';
+    var 欠片 = document.createDocumentFragment();
+    担当たち.forEach(function (担当, 列) {
+      var 休み = 芯.休みか(担当, 表示の日);
+      var 見出し = 箱('列の見出し' + (休み ? ' 休み' : ''), マスの左(列), 0, 寸.列の幅, 寸.見出しの高さ);
+      var 名 = document.createElement('span');
+      名.textContent = 担当;
+      見出し.appendChild(名);
+      if (休み) {
+        var 印 = document.createElement('span');
+        印.textContent = '（休み）';
+        見出し.appendChild(印);
+      }
+      欠片.appendChild(見出し);
+      if (休み) 欠片.appendChild(箱('休みの列', マスの左(列), 段の上(0), 寸.列の幅, 寸.段の高さ * 段の数));
+    });
+    for (var 段 = 0; 段 <= 段の数; 段++) {
+      欠片.appendChild(箱(段 % 2 === 0 ? '横線 太' : '横線', 寸.時刻の幅, 段の上(段), 寸.列の幅 * 担当たち.length, 0));
+      if (段 % 2 === 0) {
+        var 時 = 箱('時刻', 0, 段の上(段) - 8, 寸.時刻の幅 - 6, 16);
+        時.textContent = 芯.段から時刻(段);
+        欠片.appendChild(時);
+      }
+    }
+    for (var 列 = 0; 列 <= 担当たち.length; 列++) 欠片.appendChild(箱('縦線', マスの左(列), 段の上(0), 0, 寸.段の高さ * 段の数));
+    背景.appendChild(欠片);
+    背景.setAttribute('data-日', String(表示の日));
+  }
+
+  // ---------- 駒を描く ----------
+  function 駒の要素を作る(駒) {
+    var e = document.createElement('div');
+    e.className = '駒';
+    e.setAttribute('data-番号', String(駒.番号));
+    e.setAttribute('role', 'img');
+    var 縁 = document.createElement('div');
+    縁.className = '駒の縁';
+    var 面 = document.createElement('div');
+    面.className = '駒の面';
+    var 時 = document.createElement('span');
+    時.className = '駒の時';
+    var 名 = document.createElement('span');
+    名.className = '駒の名';
+    面.appendChild(時);
+    面.appendChild(名);
+    e.appendChild(縁);
+    e.appendChild(面);
+    return e;
+  }
+
+  function 駒を置く(e, 駒) {
+    var 列 = 芯.担当の列(駒.担当);
+    e.style.left = (マスの左(列) + 3) + 'px';
+    e.style.top = (段の上(駒.段) + 2) + 'px';
+    e.style.width = (寸.列の幅 - 6) + 'px';
+    e.style.height = (駒.段数 * 寸.段の高さ - 4) + 'px';
+    e.setAttribute('data-担当', 駒.担当);
+    e.setAttribute('data-段', String(駒.段));
+    e.querySelector('.駒の時').textContent = 芯.段から時刻(駒.段);
+    e.querySelector('.駒の名').textContent = 駒.予定;
+    e.setAttribute('aria-label', 駒.予定 + '　' + 駒.担当 + ' ' + 芯.段から時刻(駒.段) + '〜' + 芯.段から時刻(駒.段 + 駒.段数));
+  }
+
+  function 駒を描く() {
+    var ある = {};
+    Array.prototype.forEach.call(駒の層.children, function (e) { ある[e.getAttribute('data-番号')] = e; });
+    画面の駒たち.forEach(function (駒) {
+      if (駒.日 !== 表示の日 && !(持ち && 持ち.番号 === 駒.番号)) return; // ほかの日の駒は出さない（つかんでいる駒は残す）
+      var e = ある[String(駒.番号)];
+      if (!e) {
+        e = 駒の要素を作る(駒);
+        駒の層.appendChild(e);
+      }
+      delete ある[String(駒.番号)];
+      if (持ち && 持ち.番号 === 駒.番号) return;
+      駒を置く(e, 駒);
+    });
+    Object.keys(ある).forEach(function (番号) { ある[番号].remove(); });
+  }
+
+  // ---------- 様子・吹き出し・幕 ----------
+  function 様子を書く(文, 種類) {
+    様子.textContent = 文;
+    様子.className = '様子' + (種類 ? ' ' + 種類 : '');
+  }
+
+  function 吹き出しを出す(文, x, y, 種類) {
+    clearTimeout(吹き出しの時計);
+    吹き出し.textContent = 文;
+    吹き出し.className = '吹き出し' + (種類 ? ' ' + 種類 : '');
+    吹き出し.hidden = false;
+    var 枠 = 盤.getBoundingClientRect();
+    var 左 = Math.max(4, Math.min(x - 枠.left - 30, 寸.幅 - 吹き出し.offsetWidth - 4));
+    var 上 = y - 枠.top + 26;
+    if (上 + 吹き出し.offsetHeight > 寸.高さ) 上 = y - 枠.top - 吹き出し.offsetHeight - 26;
+    吹き出し.style.left = 左 + 'px';
+    吹き出し.style.top = Math.max(4, 上) + 'px';
+  }
+
+  function 吹き出しを隠す(少し残す) {
+    clearTimeout(吹き出しの時計);
+    if (少し残す) {
+      吹き出しの時計 = setTimeout(function () { 吹き出し.hidden = true; }, 設定.吹き出しの秒 * 1000);
+    } else {
+      吹き出し.hidden = true;
+    }
+  }
+
+  function 幕を出す(文, ボタンも) {
+    幕の字.textContent = 文;
+    幕のボタン.hidden = !ボタンも;
+    幕.hidden = false;
+  }
+
+  function 幕を閉じる() { 幕.hidden = true; }
+
+  // ---------- 日のタブ ----------
+  function タブを描く() {
+    日のタブ.textContent = '';
+    var 日たち = 表の姿 && 表の姿.日たち;
+    if (!日たち) {
+      日のタブ.hidden = true;
+      return;
+    }
+    名前たち = 芯.日の名前たち(日たち);
+    名前たち.forEach(function (名, 日) {
+      var タブ = document.createElement('button');
+      タブ.type = 'button';
+      タブ.setAttribute('role', 'tab');
+      タブ.setAttribute('data-日', String(日));
+      タブ.setAttribute('aria-selected', 日 === 表示の日 ? 'true' : 'false');
+      タブ.textContent = 名;
+      日のタブ.appendChild(タブ);
+    });
+    日のタブ.hidden = false;
+  }
+
+  function 日を替える(日) {
+    if (日 === 表示の日) return;
+    表示の日 = 日;
+    背景を描く();
+    駒を描く();
+    タブを描く();
+    表の中身を描く();
+  }
+
+  function タブを光らせる(日) {
+    var タブ = 日のタブ.querySelector('[data-日="' + 日 + '"]');
+    if (!タブ) return;
+    タブ.classList.remove('光る');
+    void タブ.offsetWidth; // 続けて光らせる時も、はじめから
+    タブ.classList.add('光る');
+  }
+
+  function 指の下のタブ(x, y) {
+    var タブたち = 日のタブ.hidden ? [] : 日のタブ.querySelectorAll('button');
+    for (var i = 0; i < タブたち.length; i++) {
+      var 枠 = タブたち[i].getBoundingClientRect();
+      if (x >= 枠.left && x <= 枠.right && y >= 枠.top && y <= 枠.bottom) return Number(タブたち[i].getAttribute('data-日'));
+    }
+    return null;
+  }
+
+  function タブの印(日, 置けない) {
+    Array.prototype.forEach.call(日のタブ.querySelectorAll('button'), function (タブ) {
+      var 乗る = 日 !== null && Number(タブ.getAttribute('data-日')) === 日;
+      タブ.classList.toggle('乗っている', 乗る);
+      タブ.classList.toggle('置けない', 乗る && 置けない);
+    });
+  }
+
+  日のタブ.addEventListener('click', function (e) {
+    var タブ = e.target.closest ? e.target.closest('button') : null;
+    if (!タブ || 持ち) return;
+    触った();
+    日を替える(Number(タブ.getAttribute('data-日')));
+  });
+
+  // ---------- 表のいまの中身・棋譜・ボタン ----------
+  function 列の字(列) {
+    return String.fromCharCode(65 + 列);
+  }
+
+  // 「盤」のシートを読み戻した物のうち、時刻の列と、いま見ている日の6列だけを出す
+  function 表の中身を描く() {
+    表の中身.textContent = '';
+    var 中身 = 表の姿 && 表の姿.盤の中身;
+    if (!中身 || !中身.値) return;
+    var 列たち = [0].concat(担当たち.map(function (担当, 列) { return 芯.盤の列(表示の日, 列); }));
+    var 表 = document.createElement('table');
+    var 列の組 = document.createElement('colgroup');
+    ['行番の列', '時刻の列', '', '', '', '', '', ''].forEach(function (組) {
+      var 列 = document.createElement('col');
+      if (組) 列.className = 組;
+      列の組.appendChild(列);
+    });
+    表.appendChild(列の組);
+    var 頭 = 表.insertRow();
+    頭.className = '頭';
+    頭.insertCell().textContent = '';
+    列たち.forEach(function (列) { 頭.insertCell().textContent = 列の字(列); });
+    中身.値.forEach(function (行, i) {
+      var 一行 = 表.insertRow();
+      var 番 = 一行.insertCell();
+      番.className = '行番';
+      番.textContent = String(i + 1);
+      列たち.forEach(function (j, k) {
+        if (i === 0 && k > 1) return; // 1行目の日付は、その日の6列をまたいで出す
+        var 枡 = 一行.insertCell();
+        if (i === 0 && k === 1) 枡.colSpan = 担当たち.length;
+        枡.textContent = 行[j] === undefined ? '' : 行[j];
+        if (j === 0) 枡.className = '時刻の枡';
+        var 色 = 中身.色 && 中身.色[i] ? String(中身.色[i][j]) : '';
+        if (/^#[0-9a-f]{6}$/i.test(色)) 枡.style.background = 色;
+      });
+    });
+    表の中身.appendChild(表);
+  }
+
+  // 戻せる手（新しい順）：表の姿の並びに、まだ表に書いていない手を重ねる
+  function 見えている戻せる手() {
+    var 並び = 表の姿 && 表の姿.戻せる手 ? 表の姿.戻せる手.slice() : [];
+    送る列.forEach(function (一つ) {
+      if (一つ.手.何を === 'はじめ') 並び = [];
+      else if (一つ.手.何を === '動かす') 並び.unshift({ 手: null, 元の手: 一つ, 駒: 一つ.手.駒, 予定: 一つ.手.予定, 前: 一つ.手.前, 後: 一つ.手.後 });
+      else if (一つ.手.何を === '待った') 並び.shift();
+    });
+    return 並び;
+  }
+
+  function 棋譜を描く() {
+    棋譜の欄.textContent = '';
+    var 手数 = 表の姿 ? 表の姿.手数 : 0;
+    var 並び = (表の姿 ? 表の姿.棋譜 : []).map(function (手) { return { 文: 芯.棋譜の文(手, 名前たち), 書いている: false }; });
+    送る列.forEach(function (一つ) {
+      if (一つ.手.何を === 'はじめ') { 並び = []; 手数 = 0; return; }
+      手数 += 1;
+      一つ.仮の手 = 手数;
+      var 仮 = { 手: 手数, 何を: 一つ.手.何を, 予定: 一つ.手.予定, 前: 一つ.手.前, 後: 一つ.手.後 };
+      if (一つ.手.何を === '待った') 仮.戻した手 = 一つ.手.戻す.手 || (一つ.手.戻す.元の手 && 一つ.手.戻す.元の手.仮の手) || '…';
+      並び.push({ 文: 芯.棋譜の文(仮, 名前たち), 書いている: true });
+    });
+    if (!並び.length) {
+      var 空 = document.createElement('li');
+      空.className = '空';
+      空.textContent = 'まだ動かしていません';
+      棋譜の欄.appendChild(空);
+      return;
+    }
+    並び.slice().reverse().forEach(function (一つ) {
+      var li = document.createElement('li');
+      li.textContent = 一つ.文 + (一つ.書いている ? '（書いています…）' : '');
+      if (一つ.書いている) li.className = '書いている';
+      棋譜の欄.appendChild(li);
+    });
+  }
+
+  function ボタンを整える() {
+    var 使える = !!表の姿 && 幕.hidden;
+    待ったのボタン.disabled = !使える || 見えている戻せる手().length === 0;
+    はじめのボタン.disabled = !表の姿;
+  }
+
+  function 描き直す() {
+    if (背景.getAttribute('data-日') !== String(表示の日)) 背景を描く(); // 休みの列は日ごと
+    タブを描く();
+    駒を描く();
+    棋譜を描く();
+    表の中身を描く();
+    ボタンを整える();
+  }
+
+  // ---------- Google Apps Script を呼ぶ ----------
+  function 呼ぶ(口, 頼み, 待つ秒, 成功, 失敗) {
+    if (!window.google || !google.script || !google.script.run) {
+      失敗(new Error('Google Apps Script の外では動きません'));
+      return;
+    }
+    var 終わった = false;
+    var 時計 = setTimeout(function () {
+      if (終わった) return;
+      終わった = true;
+      失敗(new Error('返事が来ません'));
+    }, 待つ秒 * 1000);
+    google.script.run
+      .withSuccessHandler(function (返事) { clearTimeout(時計); 終わった = true; 成功(返事); })
+      .withFailureHandler(function (誤り) { clearTimeout(時計); if (終わった) return; 終わった = true; 失敗(誤り); })[口](頼み);
+  }
+
+  // 読むだけの口：返事が来なければ1回だけ呼び直し、先に来た返事を1回だけ使う
+  function 読む(口) {
+    var 私の世代 = 世代;
+    var 私の書き = 書いた回数;
+    var 済んだ = false;
+    var 呼び直した = false;
+    var 頼み = { 通し番号: ++通し };
+    function 受ける(返事) {
+      if (済んだ) return;
+      済んだ = true;
+      if (私の世代 !== 世代 || 私の書き !== 書いた回数 || 送る列.length || 持ち) return; // 読んだ後に書いた・書いている
+      if (表の姿 && 返事 && 返事.姿 && 返事.姿.版 < 表の姿.版) return; // 遅れて届いた古い姿
+      読んだ(返事);
+    }
+    function あきらめる() {
+      if (済んだ) return;
+      済んだ = true;
+      様子を書く('表を読めませんでした。少し待ってから、ページを開き直してください', '注意');
+    }
+    function 落ちた() {
+      if (済んだ) return;
+      if (!呼び直した) {
+        呼び直した = true;
+        呼ぶ(口, 頼み, 設定.読む待ちの秒, 受ける, あきらめる);
+        return;
+      }
+      あきらめる();
+    }
+    呼ぶ(口, 頼み, 設定.読む待ちの秒, 受ける, 落ちた);
+  }
+
+  function 読んだ(返事) {
+    if (!返事) return;
+    if (返事.結果 === '読んだ') {
+      var 変わった = !!表の姿 && 表の姿.版 !== 返事.姿.版;
+      表の姿 = 返事.姿;
+      画面の駒たち = 芯.写す(表の姿.駒たち);
+      幕を閉じる();
+      描き直す();
+      if (!読み始めた) 様子を書く('表を読みました');
+      else if (変わった) 様子を書く('表が変わっていたので、いまの形に合わせました');
+      読み始めた = true;
+      return;
+    }
+    if (返事.結果 === '読めない') {
+      表の姿 = 返事.姿;
+      画面の駒たち = [];
+      描き直す();
+      幕を出す('表の一覧が読めません。' + 返事.訳, true);
+      様子を書く('表の一覧が読めません', '注意');
+      ボタンを整える();
+      return;
+    }
+    if (返事.結果 === '休み') {
+      幕を出す(返事.訳 || 'いまは休んでいます', false);
+      様子を書く('いまは休んでいます', '注意');
+      return;
+    }
+    様子を書く(返事.訳 || '表を読めませんでした', '注意');
+  }
+
+  // ---------- 表に書く（押した順に1つずつ。画面は待たない） ----------
+  function 送る() {
+    if (送っている || !送る列.length) return;
+    var 一つ = 送る列[0];
+    var 私の世代 = 世代;
+    送っている = { 一つ: 一つ, 始め: Date.now() };
+    様子を書く('裏で表に書いています…' + (送る列.length > 1 ? '（あと' + (送る列.length - 1) + '手）' : ''), '書いている');
+    呼ぶ(一つ.口, 一つ.頼み, 設定.書く待ちの秒, function (返事) {
+      if (私の世代 !== 世代) return;
+      var 秒 = (Date.now() - 送っている.始め) / 1000;
+      送っている = null;
+      届いた(一つ, 返事, 秒);
+    }, function () {
+      if (私の世代 !== 世代) return;
+      送っている = null;
+      合わせ直す('表に書けたか分かりません。表を読み直します', null, null);
+      読む('盤を読む');
+    });
+  }
+
+  // 残りの手を、表のいまの形に重ね直す。重ならなければ null
+  function 重ねる(駒たち, 一つ) {
+    if (一つ.手.何を === 'はじめ') return 芯.はじめの駒たち();
+    var 駒 = 芯.番号で探す(駒たち, 一つ.頼み.番号);
+    var 見ていた = 一つ.頼み.見ていた;
+    if (!駒 || 駒.日 !== 見ていた.日 || 駒.担当 !== 見ていた.担当 || 駒.段 !== 見ていた.段) return null;
+    var 結果 = 芯.駒を動かす(駒たち, 一つ.頼み.番号, 一つ.頼み.行き先);
+    return 結果.形 === '置ける' ? 結果.駒たち : null;
+  }
+
+  function 届いた(一つ, 返事, 秒) {
+    if (!返事 || 返事.通し番号 !== 一つ.頼み.通し番号) {
+      合わせ直す('表からの返事が合いません。表を読み直します', null, null);
+      読む('盤を読む');
+      return;
+    }
+    if (返事.結果 !== '書いた') {
+      合わせ直す(返事.訳 || '表には書きませんでした', 返事.姿 || null, 返事);
+      return;
+    }
+    送る列.shift();
+    書いた回数 += 1;
+    表の姿 = 返事.姿;
+    var 駒たち = 芯.写す(表の姿.駒たち);
+    for (var i = 0; i < 送る列.length; i++) {
+      駒たち = 重ねる(駒たち, 送る列[i]);
+      if (!駒たち) {
+        合わせ直す('ほかの人が先に動かしました。表のいまの形に読み直しました', null, null);
+        return;
+      }
+    }
+    画面の駒たち = 駒たち;
+    幕を閉じる();
+    描き直す();
+    if (!送る列.length) 様子を書く('表に書きました（' + 秒.toFixed(1) + '秒）' + (返事.訳 ? '　' + 返事.訳 : ''));
+    送る();
+  }
+
+  // 書かなかった・分からない時：残りの手を捨て、表の形に合わせて、訳を言う
+  function 合わせ直す(文, 姿, 返事) {
+    世代 += 1;
+    送る列 = [];
+    送っている = null;
+    if (姿) 表の姿 = 姿;
+    画面の駒たち = 表の姿 && 表の姿.駒たち ? 芯.写す(表の姿.駒たち) : [];
+    描き直す();
+    if (返事 && 返事.結果 === '読めない') 幕を出す('表の一覧が読めません。' + 返事.訳, true);
+    else if (返事 && 返事.結果 === '休み') 幕を出す(返事.訳, false);
+    様子を書く(文, '注意');
+    ボタンを整える();
+  }
+
+  function 列に入れる(口, 頼み, 手) {
+    送る列.push({ 口: 口, 頼み: 頼み, 手: 手 });
+    描き直す();
+    送る();
+  }
+
+  function 動かす(番号, 元, 行き先) {
+    var 結果 = 芯.駒を動かす(画面の駒たち, 番号, 行き先);
+    if (結果.形 !== '置ける') return 結果;
+    var 駒 = 芯.番号で探す(画面の駒たち, 番号);
+    画面の駒たち = 結果.駒たち;
+    列に入れる('駒を動かす', { 通し番号: ++通し, 番号: 番号, 見ていた: 元, 行き先: 行き先 },
+      { 何を: '動かす', 駒: 番号, 予定: 駒.予定, 前: 元, 後: 行き先 });
+    return 結果;
+  }
+
+  function 待った() {
+    if (持ち || !表の姿) return;
+    触った();
+    var 並び = 見えている戻せる手();
+    if (!並び.length) {
+      様子を書く('戻す手がありません', '注意');
+      return;
+    }
+    var 的 = 並び[0];
+    var 結果 = 芯.駒を動かす(画面の駒たち, 的.駒, 的.前);
+    if (結果.形 !== '置ける') {
+      様子を書く(芯.知らせの文(結果) || '戻せませんでした', '注意');
+      return;
+    }
+    画面の駒たち = 結果.駒たち;
+    列に入れる('一手戻す', { 通し番号: ++通し, 番号: 的.駒, 見ていた: 的.後, 行き先: 的.前 },
+      { 何を: '待った', 駒: 的.駒, 予定: 的.予定, 前: 的.後, 後: 的.前, 戻す: 的 });
+    if (的.前.日 !== 表示の日) タブを光らせる(的.前.日); // ほかの日へ戻った
+  }
+
+  function はじめに戻す() {
+    if (持ち || !表の姿) return;
+    触った();
+    画面の駒たち = 芯.はじめの駒たち();
+    列に入れる('はじめの形に戻す', { 通し番号: ++通し }, { 何を: 'はじめ' });
+  }
+
+  // ---------- つかむ・動かす・離す（マウスと指を1つの作りで） ----------
+  function 指の下の行き先(x, y) {
+    var 枠 = 盤.getBoundingClientRect();
+    var 列 = Math.floor((x - 枠.left - 3 - 寸.時刻の幅) / 寸.列の幅);
+    var 指の段 = Math.floor((y - 枠.top - 3 - 寸.見出しの高さ) / 寸.段の高さ);
+    if (列 < 0 || 列 >= 担当たち.length) return null;
+    return { 日: 表示の日, 担当: 担当たち[列], 段: 芯.行き先の段(指の段, 持ち.つかんだ段) };
+  }
+
+  // 日のタブに乗っている時：離すと、同じ担当・同じ時刻でその日へ。少し待つと、その日の盤に替わる
+  function タブに乗っている(タブ, x, y) {
+    if (持ち.上のタブ !== タブ) {
+      clearTimeout(持ち.タブの時計);
+      持ち.上のタブ = タブ;
+      if (タブ !== 表示の日) {
+        持ち.タブの時計 = setTimeout(function () {
+          if (持ち && 持ち.上のタブ === タブ) 日を替える(タブ);
+        }, 設定.タブを待つ秒 * 1000);
+      }
+    }
+    持ち.行き先 = { 日: タブ, 担当: 持ち.元.担当, 段: 持ち.元.段 };
+    持ち.調べ = 芯.行き先を調べる(画面の駒たち, 持ち.番号, 持ち.行き先);
+    影.hidden = true;
+    タブの印(タブ, 持ち.調べ.形 !== '置ける' && 持ち.調べ.形 !== '同じ所');
+    if (持ち.調べ.形 === '置ける') {
+      吹き出しを出す('離すと ' + 名前たち[タブ] + ' ' + 持ち.元.担当 + ' ' + 芯.段から時刻(持ち.元.段) + ' へ動きます（少し待つと、その日の盤に替わります）', x, y, '注意');
+    } else if (持ち.調べ.形 === '同じ所') {
+      吹き出しを隠す();
+    } else {
+      吹き出しを出す(芯.知らせの文(持ち.調べ, 名前たち), x, y);
+    }
+  }
+
+  function タブから降りた() {
+    if (持ち.上のタブ === null || 持ち.上のタブ === undefined) return;
+    clearTimeout(持ち.タブの時計);
+    持ち.上のタブ = null;
+    タブの印(null, false);
+  }
+
+  function 影を出す(x, y) {
+    var 駒 = 芯.番号で探す(画面の駒たち, 持ち.番号);
+    var 調べ = 持ち.調べ;
+    if (!持ち.行き先) {
+      影.hidden = true;
+      吹き出しを出す(芯.知らせの文(調べ, 名前たち), x, y);
+      return;
+    }
+    if (調べ.形 === '同じ所') {
+      影.hidden = true;
+      吹き出しを隠す();
+      return;
+    }
+    var 列 = 芯.担当の列(持ち.行き先.担当);
+    var 段 = Math.max(0, Math.min(段の数 - 駒.段数, 持ち.行き先.段));
+    影.style.left = (マスの左(列) + 3) + 'px';
+    影.style.top = (段の上(段) + 3) + 'px';
+    影.style.width = (寸.列の幅 - 4) + 'px';
+    影.style.height = (駒.段数 * 寸.段の高さ - 2) + 'px';
+    影.classList.toggle('置けない', 調べ.形 !== '置ける');
+    影.hidden = false;
+    if (調べ.形 !== '置ける') 吹き出しを出す(芯.知らせの文(調べ, 名前たち), x, y);
+    else if (調べ.休み) 吹き出しを出す(持ち.行き先.担当 + 'は休みです（置けます）', x, y, '注意');
+    else 吹き出しを隠す();
+  }
+
+  // 置けた時は、置いた日の盤のまま。置けなかった・やめた時は、つかんだ時の日の盤へ戻す
+  function 持ちを片付ける(置けた) {
+    var 要素 = 持ち.要素;
+    var 始めの日 = 持ち.始めの日;
+    clearTimeout(持ち.タブの時計);
+    try { 要素.releasePointerCapture(持ち.指); } catch (e) { /* もう放れている */ }
+    要素.classList.remove('持ち上げ');
+    要素.style.transform = '';
+    持ち = null;
+    影.hidden = true;
+    タブの印(null, false);
+    if (!置けた && 表示の日 !== 始めの日) 日を替える(始めの日);
+    else 駒を描く();
+  }
+
+  function つかむ(e) {
+    if (持ち || !幕.hidden || !表の姿) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    var 要素 = e.target.closest ? e.target.closest('.駒') : null;
+    if (!要素) return;
+    var 駒 = 芯.番号で探す(画面の駒たち, Number(要素.getAttribute('data-番号')));
+    if (!駒) return;
+    e.preventDefault();
+    触った();
+    var 枠 = 盤.getBoundingClientRect();
+    var 指の段 = Math.floor((e.clientY - 枠.top - 3 - 寸.見出しの高さ) / 寸.段の高さ);
+    持ち = {
+      番号: 駒.番号, 要素: 要素, 指: e.pointerId, つかんだ段: 芯.つかんだ段(駒, 指の段),
+      元: { 日: 駒.日, 担当: 駒.担当, 段: 駒.段 }, 始めの日: 表示の日, 始めx: e.clientX, 始めy: e.clientY,
+      動いた: false, 行き先: null, 調べ: null, 上のタブ: null, タブの時計: null
+    };
+    try { 要素.setPointerCapture(e.pointerId); } catch (err) { /* 指が離れている */ }
+    要素.classList.add('持ち上げ');
+    吹き出しを隠す();
+  }
+
+  function 動かしている(e) {
+    if (!持ち || e.pointerId !== 持ち.指) return;
+    var dx = e.clientX - 持ち.始めx;
+    var dy = e.clientY - 持ち.始めy;
+    if (!持ち.動いた && Math.abs(dx) + Math.abs(dy) < 5) return;
+    持ち.動いた = true;
+    持ち.要素.style.transform = 'translate(' + dx + 'px,' + dy + 'px) rotate(-4deg)';
+    var タブ = 指の下のタブ(e.clientX, e.clientY);
+    if (タブ !== null) {
+      タブに乗っている(タブ, e.clientX, e.clientY);
+      return;
+    }
+    タブから降りた();
+    持ち.行き先 = 指の下の行き先(e.clientX, e.clientY);
+    持ち.調べ = 持ち.行き先 ? 芯.行き先を調べる(画面の駒たち, 持ち.番号, 持ち.行き先) : { 形: 'はみ出す', どこ: '横' };
+    影を出す(e.clientX, e.clientY);
+  }
+
+  function 離す(e) {
+    if (!持ち || e.pointerId !== 持ち.指) return;
+    var 今 = 持ち;
+    var 置ける = 今.動いた && !!今.調べ && 今.調べ.形 === '置ける';
+    持ちを片付ける(置ける);
+    if (!今.動いた || !今.調べ || 今.調べ.形 === '同じ所') {
+      吹き出しを隠す();
+      return;
+    }
+    if (!置ける) {
+      様子を書く(芯.知らせの文(今.調べ, 名前たち), '注意');
+      吹き出しを隠す(true);
+      return;
+    }
+    var 結果 = 動かす(今.番号, 今.元, 今.行き先);
+    if (今.行き先.日 !== 表示の日) {
+      // 見ていない日へ動いた（タブの上で離した）。駒は見えなくなるので、どこへ行ったかを言う
+      タブを光らせる(今.行き先.日);
+      吹き出しを出す(名前たち[今.行き先.日] + ' ' + 今.行き先.担当 + ' ' + 芯.段から時刻(今.行き先.段) + ' へ動かしました' +
+        (結果.休み ? '（' + 今.行き先.担当 + 'は休みの日です）' : ''), e.clientX, e.clientY, '注意');
+      吹き出しを隠す(true);
+    } else if (結果.休み) {
+      吹き出しを出す(芯.知らせの文(結果, 名前たち), e.clientX, e.clientY, '注意');
+      吹き出しを隠す(true);
+    } else {
+      吹き出しを隠す();
+    }
+  }
+
+  function やめる(文) {
+    if (!持ち) return;
+    持ちを片付ける(false);
+    吹き出しを隠す();
+    if (文) 様子を書く(文);
+  }
+
+  駒の層.addEventListener('pointerdown', つかむ);
+  駒の層.addEventListener('pointermove', 動かしている);
+  駒の層.addEventListener('pointerup', 離す);
+  駒の層.addEventListener('pointercancel', function (e) { if (持ち && e.pointerId === 持ち.指) やめる('動かすのをやめました'); });
+  駒の層.addEventListener('lostpointercapture', function (e) { if (持ち && e.pointerId === 持ち.指) やめる(''); });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && 持ち) {
+      e.preventDefault();
+      やめる('動かすのをやめました');
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'z' || e.key === 'Z')) {
+      e.preventDefault();
+      待った();
+    }
+  });
+  待ったのボタン.addEventListener('click', 待った);
+  はじめのボタン.addEventListener('click', はじめに戻す);
+  幕のボタン.addEventListener('click', はじめに戻す);
+
+  // ---------- 読み直し（20秒おきと、窓に戻った時。10分さわらなければ止める） ----------
+  function 触った() {
+    最後に触った = Date.now();
+    if (!読み直しの番) 読み直しを始める();
+  }
+
+  function 読み直しを始める() {
+    読み直しの番 = setInterval(function () {
+      if (document.hidden || 持ち || 送る列.length || !表の姿) return;
+      if (Date.now() - 最後に触った > 設定.止めるまでの分 * 60000) {
+        clearInterval(読み直しの番);
+        読み直しの番 = null;
+        様子を書く('しばらく動きが無いので、読み直しを止めました。駒を動かすと、また読み直します');
+        return;
+      }
+      読む('盤を読む');
+    }, 設定.読み直しの秒 * 1000);
+  }
+
+  function 戻ってきた() {
+    if (document.hidden || 持ち || 送る列.length || !表の姿) return;
+    触った();
+    読む('盤を読む');
+  }
+  window.addEventListener('focus', 戻ってきた);
+  document.addEventListener('visibilitychange', 戻ってきた);
+
+  // 盤の寸法は幅だけで決まる。高さだけが変わった時（窓や枠の高さが変わる）は描き直さず、つかんでいる駒もそのまま
+  var 寸の時計 = null;
+  var 前の幅 = 0;
+  window.addEventListener('resize', function () {
+    clearTimeout(寸の時計);
+    寸の時計 = setTimeout(function () {
+      var 幅 = 盤の場所.clientWidth;
+      if (幅 === 前の幅) return;
+      前の幅 = 幅;
+      if (持ち) やめる('');
+      背景を描く();
+      駒を描く();
+    }, 120);
+  });
+
+  // 確かめのために、いまの様子を読めるようにしておく（読むだけ）
+  window.予定の盤 = Object.freeze({
+    寸: function () { return Object.assign({}, 寸); },
+    駒たち: function () { return 芯.写す(画面の駒たち); },
+    送る列の長さ: function () { return 送る列.length; },
+    表示の日: function () { return 表示の日; },
+    版: function () { return 表の姿 ? 表の姿.版 : null; }
+  });
+
+  // ---------- はじめ ----------
+  背景を描く();
+  前の幅 = 盤の場所.clientWidth;
+  棋譜を描く();
+  ボタンを整える();
+  読む('開く');
+  読み直しを始める();
+})();
+</script>
+</body>
+</html>

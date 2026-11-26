@@ -1,0 +1,6 @@
+# Google Apps Script の置き場の番号（人ごとに違う。置き場には載せない）
+.clasp.json
+# 確かめのたびに変わる物
+確かめ/画面の確かめの結果.json
+確かめ/写し/落ちた_*.png
+node_modules/
